@@ -1,0 +1,529 @@
+REVISED PHASE 5.10 IMPLEMENTATION PLAN
+
+CRITICAL CHANGES BASED ON YOUR FEEDBACK:
+
+✅ Current Price = LIVE PRICE (fetched from exchange API in real-time)
+✅ Keep 4 Dashboard Cards (Active Entries, Win Rate, Avg Profit, Total Signals)
+✅ Signals Page = Only symbols in Dashboard Table
+✅ Entries Page = Only ACTIVE entries
+✅ Symbols Page = Controls what appears in Dashboard Table
+
+
+PHASE 5.10.1: BACKEND - DASHBOARD API & LIVE PRICES (3 sessions)
+Session 1: Live Price Integration
+Task 1.1: Create Live Price Fetcher
+python# New file: backend/automation/price_fetcher.py
+
+import ccxt
+
+def get_live_prices(symbols):
+    """
+    Fetch live prices from exchange for all symbols
+    Returns: {symbol: current_price}
+    """
+    exchange = ccxt.binance()
+    prices = {}
+    
+    for symbol in symbols:
+        ticker = exchange.fetch_ticker(symbol)
+        prices[symbol] = ticker['last']
+    
+    return prices
+Task 1.2: Live Price API Endpoint
+python# New endpoint: GET /api/live-prices
+# Returns: [{symbol: "BTC/USDT", price: 88055.70, timestamp: "..."}]
+
+@router.get("/live-prices")
+async def get_live_prices(db: Session = Depends(get_db)):
+    # Get active symbols from tracked_symbols
+    # Fetch live prices from exchange
+    # Return as JSON
+Task 1.3: Update Dashboard Stats API
+python# Modify: GET /api/dashboard/stats
+# Calculate stats based on ACTIVE symbols in tracked_symbols only
+# - active_entries (count from entry_tracking WHERE symbol IN active_symbols)
+# - win_rate (from entries WHERE symbol IN active_symbols)
+# - avg_profit (from entries WHERE symbol IN active_symbols)
+# - total_signals_7d (from signals WHERE symbol IN active_symbols)
+Deliverable: Live price fetching system + Dashboard stats filtered by active symbols
+
+Session 2: Dashboard Table API (Filtered by Active Symbols)
+Task 2.1: Verify Database Schema
+sql-- Verify magic_lines table
+SELECT * FROM magic_lines LIMIT 1;
+
+-- Verify support_resistance table
+SELECT * FROM support_resistance LIMIT 1;
+
+-- Add exit_reason to entry_tracking if missing
+ALTER TABLE entry_tracking 
+ADD COLUMN IF NOT EXISTS exit_reason VARCHAR(50),
+ADD COLUMN IF NOT EXISTS exit_reason_detail TEXT,
+ADD COLUMN IF NOT EXISTS final_exit_datetime TIMESTAMP;
+
+-- Add indexes
+CREATE INDEX IF NOT EXISTS idx_entry_tracking_symbol_tf 
+ON entry_tracking(symbol, timeframe);
+
+CREATE INDEX IF NOT EXISTS idx_signals_symbol_datetime 
+ON signals(symbol, datetime DESC);
+Task 2.2: Dashboard Table API Endpoint
+python# Endpoint: GET /api/dashboard/table
+# Returns: Complete dashboard data ONLY for symbols in tracked_symbols WHERE active=TRUE
+
+@router.get("/table")
+async def get_dashboard_table(db: Session = Depends(get_db)):
+    # Step 1: Get active symbols from tracked_symbols
+    active_symbols = db.query(TrackedSymbol).filter(
+        TrackedSymbol.active == True
+    ).all()
+    
+    # Step 2: For each symbol + timeframe combination:
+    results = []
+    for symbol_row in active_symbols:
+        for timeframe in symbol_row.timeframes:
+            # Get latest candle
+            # Get all indicators
+            # Get latest signal
+            # Get magic line (if exists)
+            # Get S/R (if exists)
+            # Get active entry (if exists)
+            # Get LIVE price from exchange API
+            
+            results.append({
+                'symbol': symbol,
+                'timeframe': timeframe,
+                'current_price': live_price,  # <-- LIVE from exchange
+                'rsi': ...,
+                'macd': ...,
+                # ... all other indicators
+                'signal': ...,
+                'score': ...,
+                'entry_price': ...,
+                'entry_status': ...,
+                'exit_reason': ...,
+                'magic_line': ...,
+                'support': ...,
+                'resistance': ...
+            })
+    
+    return {'rows': results}
+Deliverable: Dashboard table API returning data ONLY for active tracked symbols with LIVE prices
+
+Session 3: Magic Line & S/R APIs + Auto-Calculation
+Task 3.1: Magic Line API
+python# Routes: /api/magic-lines
+
+GET /api/magic-lines                    # Get all magic lines
+POST /api/magic-lines                   # Add/update magic line
+  Body: {symbol: "BTC/USDT", timeframe: "1h", price: 88500}
+PUT /api/magic-lines/{id}               # Update
+DELETE /api/magic-lines/{id}            # Delete
+Task 3.2: Support/Resistance API
+python# Routes: /api/support-resistance
+
+GET /api/support-resistance             # Get all S/R
+POST /api/support-resistance            # Manual add/update
+  Body: {symbol: "BTC/USDT", support: 85000, resistance: 92000}
+PUT /api/support-resistance/{id}        # Update
+DELETE /api/support-resistance/{id}     # Delete
+Task 3.3: S/R Auto-Calculation (Pine Script Logic)
+python# Add to indicator_calculator.py
+
+def calculate_auto_support_resistance(symbol, timeframe='D'):
+    """
+    Calculate previous month high/low as S/R
+    Logic from Pine Script lines 363-367
+    """
+    # Get last 30 daily candles
+    candles = get_candles(symbol, 'D', limit=30)
+    
+    # Calculate previous month high/low
+    prev_month_high = max([c.high for c in candles])
+    prev_month_low = min([c.low for c in candles])
+    
+    # Store in support_resistance table
+    db.merge(SupportResistance(
+        symbol=symbol,
+        support=prev_month_low,
+        resistance=prev_month_high,
+        auto_calculated=True
+    ))
+Task 3.4: Run Auto-Calculation in Automation
+python# Modify: run_automation.py
+# After calculating indicators, also calculate S/R
+for symbol in tracked_symbols:
+    calculate_auto_support_resistance(symbol)
+Deliverable: Magic Line & S/R management + auto-calculation working
+
+PHASE 5.10.2: FRONTEND - DASHBOARD TABLE (3 sessions)
+Session 4: Dashboard Table Component + 4 Stat Cards
+Task 4.1: Update Dashboard.jsx to Include Table
+javascript// File: src/components/Dashboard.jsx
+
+function Dashboard() {
+  const [stats, setStats] = useState(null);
+  const [tableData, setTableData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+    
+    // Auto-refresh every 30 seconds (live prices!)
+    const interval = setInterval(fetchDashboardData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchDashboardData = async () => {
+    const [statsData, tableRows] = await Promise.all([
+      apiService.getDashboardStats(),  // 4 stat cards data
+      apiService.getDashboardTable()   // Table data
+    ]);
+    
+    setStats(statsData);
+    setTableData(tableRows);
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      {/* 4 Stat Cards at Top */}
+      <StatsCards stats={stats} />
+      
+      {/* Dashboard Table Below */}
+      <DashboardTable data={tableData} onRefresh={fetchDashboardData} />
+    </div>
+  );
+}
+Task 4.2: Create DashboardTable Component
+
+25 columns (as per your Pine Script)
+Display LIVE current price (auto-refreshes)
+Color coding for all indicators
+Horizontal scroll
+Fixed header
+
+Deliverable: Dashboard with 4 cards + comprehensive table
+
+Session 5: Table Styling & Color Coding
+Task 5.1: Match TradingView Style
+
+Dark theme
+Blue header row
+Alternating row colors
+Compact spacing
+Indicator-based colors:
+
+RSI: Green (<30), Red (>70), Gray (30-70)
+MACD: Green (+), Red (-)
+Signals: A-BUY (dark green), BUY (green), EARLY-BUY (gold), WATCH (yellow), CAUTION (orange), SELL (red)
+E-STATUS: VALIDATING (yellow), VALID (green), EXIT-1 (orange), EXIT-2/3 (red), INVALID (red)
+BB: Green (oversold), Red (overbought), Yellow (squeeze)
+
+
+
+Task 5.2: Live Price Highlighting
+
+Show price in green if increasing
+Show price in red if decreasing
+Pulse animation on price update
+
+Deliverable: Beautiful TradingView-style table
+
+Session 6: Inline Editing - Magic Line
+Task 6.1: Editable Magic Line Column
+javascript// Double-click Magic Line cell to edit
+// Save on blur/enter
+// Update database via API
+// Show success/error toast
+
+const handleMagicLineEdit = async (symbol, timeframe, newPrice) => {
+  try {
+    await apiService.updateMagicLine({symbol, timeframe, price: newPrice});
+    toast.success('Magic Line updated');
+    refreshTable();
+  } catch (error) {
+    toast.error('Failed to update');
+  }
+};
+Task 6.2: Edit Indicator
+
+Pencil icon on hover
+Input validation (numbers only)
+Optimistic UI update
+
+Deliverable: Functional Magic Line editing
+
+Session 7: Filters & Auto-Refresh
+Task 7.1: Table Filters
+
+Filter by Symbol (dropdown showing only active symbols)
+Filter by Timeframe (buttons: All, 15m, 1h, 4h, 1d)
+Filter by Signal (dropdown: All, A-BUY, BUY, EARLY-BUY, WATCH, CAUTION, SELL)
+Filter by Entry Status (dropdown: All, VALIDATING, VALID, ACTIVE, EXIT-1, EXIT-2, EXIT-3)
+
+Task 7.2: Auto-Refresh System
+
+Refresh table every 30 seconds (for live prices)
+Show "Last updated: X seconds ago"
+Manual refresh button
+Pause/Resume auto-refresh toggle
+
+Deliverable: Filtered, auto-refreshing table
+
+PHASE 5.10.3: UPDATE EXISTING PAGES (2 sessions)
+Session 8: Update Signals Page (Filter by Active Symbols)
+Task 8.1: Modify Signals API
+python# Modify: GET /api/signals
+# Add filter: WHERE symbol IN (active tracked symbols)
+
+@router.get("/")
+async def get_signals(db: Session = Depends(get_db)):
+    # Get active symbols
+    active_symbols = get_active_tracked_symbols(db)
+    
+    # Filter signals
+    query = db.query(Signal).filter(
+        Signal.symbol.in_([s.symbol for s in active_symbols])
+    )
+    
+    return signals
+Task 8.2: Update Frontend
+
+Signals page now only shows signals for active symbols
+Update symbol filter dropdown to show only active symbols
+
+Deliverable: Signals page filtered by active symbols
+
+Session 9: Update Entries Page (Show Only ACTIVE Entries)
+Task 9.1: Modify Entries API
+python# Modify: GET /api/entries
+# Default: active_only=True (override existing default)
+# Filter: WHERE symbol IN (active tracked symbols)
+
+@router.get("/")
+async def get_entries(
+    db: Session = Depends(get_db),
+    active_only: bool = Query(True),  # Changed default to True
+    symbol: Optional[str] = None,
+    timeframe: Optional[str] = None
+):
+    active_symbols = get_active_tracked_symbols(db)
+    
+    query = db.query(EntryTracking).filter(
+        EntryTracking.symbol.in_([s.symbol for s in active_symbols])
+    )
+    
+    if active_only:
+        query = query.filter(EntryTracking.active == True)
+    
+    return entries
+Task 9.2: Update Frontend
+
+"Active Only" button now ON by default
+"All Entries" shows historical (but still filtered by active symbols)
+Update symbol filter dropdown to show only active symbols
+
+Deliverable: Entries page showing ACTIVE entries only for active symbols
+
+PHASE 5.10.4: SYMBOLS PAGE ENHANCEMENT (1 session)
+Session 10: Symbols Page - Controls Dashboard
+Task 10.1: Update Symbols Page Message
+javascript// Add prominent message at top of Symbols page:
+
+<div className="bg-blue-100 border border-blue-300 rounded p-4 mb-6">
+  <h3 className="font-bold text-blue-900">
+    ℹ️ Dashboard Display Control
+  </h3>
+  <p className="text-blue-800 text-sm mt-2">
+    Only symbols marked as ACTIVE will appear in:
+    • Dashboard Table
+    • Signals Page
+    • Entries Page
+    • Statistics Cards
+  </p>
+  <p className="text-blue-800 text-sm mt-2">
+    Add or activate symbols below to see them in the dashboard.
+  </p>
+</div>
+```
+
+**Task 10.2: Activate/Deactivate Toggle**
+- Add "Active" toggle for each symbol
+- Clicking toggle updates `tracked_symbols.active`
+- Dashboard auto-updates when symbols activated/deactivated
+
+**Task 10.3: Add Symbol Workflow**
+```
+User adds symbol → 
+API creates in tracked_symbols (active=TRUE) → 
+Triggers 6-month historical download → 
+Symbol appears in Dashboard Table
+Deliverable: Symbols page clearly controls what appears in dashboard
+
+PHASE 5.10.5: PORTFOLIO & DCA (2 sessions)
+Session 11: Portfolio Management
+Task 11.1: Portfolio Backend
+sqlCREATE TABLE portfolio (
+    id SERIAL PRIMARY KEY,
+    symbol VARCHAR(20) NOT NULL,
+    exchange VARCHAR(20) DEFAULT 'binance',
+    buy_price DECIMAL(20,8) NOT NULL,
+    quantity DECIMAL(20,8) NOT NULL,
+    purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT,
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+Task 11.2: Portfolio API
+pythonGET /api/portfolio              # Get all holdings
+POST /api/portfolio             # Add holding
+PUT /api/portfolio/{id}         # Update
+DELETE /api/portfolio/{id}      # Delete
+GET /api/portfolio/summary      # Total P&L (uses LIVE prices!)
+Task 11.3: Portfolio Frontend
+
+Separate "Portfolio" page in navigation
+Table showing holdings with LIVE P&L
+Add/Edit/Delete holdings
+Summary cards (Total Investment, Current Value, Total P&L)
+
+Deliverable: Portfolio management system
+
+Session 12: DCA Calculator
+Task 12.1: DCA API
+pythonPOST /api/tools/dca
+# Input: initial_price, initial_qty, current_price, additional_investment
+# Output: new_avg_price, qty_to_buy, break_even_price
+
+def calculate_dca(initial_price, initial_qty, current_price, additional_investment):
+    total_investment = (initial_price * initial_qty) + additional_investment
+    qty_to_buy = additional_investment / current_price
+    new_total_qty = initial_qty + qty_to_buy
+    new_avg_price = total_investment / new_total_qty
+    
+    return {
+        'new_avg_price': new_avg_price,
+        'qty_to_buy': qty_to_buy,
+        'new_total_qty': new_total_qty,
+        'break_even_price': new_avg_price
+    }
+Task 12.2: DCA Calculator Page
+
+Form inputs
+Calculation results
+Visual chart showing DCA impact
+
+Deliverable: DCA calculator tool
+
+PHASE 5.10.6: AUTOMATION & POLISH (2 sessions)
+Session 13: 6-Month Historical Data on Symbol Add
+Task 13.1: Historical Bulk Downloader
+python# New file: backend/automation/historical_loader.py
+
+def download_historical(symbol, timeframe, months=6):
+    """
+    Download historical candles
+    Calculate all indicators
+    Generate signals
+    """
+    # Download 6 months of candles from exchange
+    # Store in candles table
+    # Run indicator_calculator
+    # Run signal_generator
+Task 13.2: Trigger on Symbol Add
+python# Modify: POST /api/symbols
+@router.post("/")
+async def add_symbol(symbol_data: SymbolCreate, background_tasks: BackgroundTasks):
+    # Add to tracked_symbols
+    new_symbol = create_symbol(symbol_data)
+    
+    # Trigger background download
+    background_tasks.add_task(
+        download_historical, 
+        new_symbol.symbol, 
+        new_symbol.timeframes
+    )
+    
+    return {"message": "Symbol added, downloading historical data..."}
+```
+
+**Deliverable:** Auto-download 6 months of data for new symbols
+
+---
+
+### **Session 14: Final Polish**
+
+**Task 14.1: Mobile Responsive**
+- Table horizontal scroll on mobile
+- Responsive stat cards
+- Mobile-friendly filters
+
+**Task 14.2: Performance Optimization**
+- Debounced live price updates
+- Lazy loading for large tables
+- Optimized re-renders
+
+**Task 14.3: Error Handling**
+- Toast notifications for all actions
+- Better loading states
+- Graceful API failure handling
+
+**Deliverable:** Production-ready system
+
+---
+
+## 📊 **REVISED TIMELINE SUMMARY**
+```
+Phase 5.10.1: Backend - Dashboard API & Live Prices    [3 sessions] → Sessions 1-3
+Phase 5.10.2: Frontend - Dashboard Table               [3 sessions] → Sessions 4-6
+Phase 5.10.3: Update Existing Pages (Filters)          [2 sessions] → Sessions 7-9
+Phase 5.10.4: Symbols Page Enhancement                 [1 session]  → Session 10
+Phase 5.10.5: Portfolio & DCA                          [2 sessions] → Sessions 11-12
+Phase 5.10.6: Automation & Polish                      [2 sessions] → Sessions 13-14
+
+Total: 14 sessions (approximately 14-18 hours of work)
+```
+
+---
+
+## 🎯 **KEY CHANGES FROM ORIGINAL PLAN:**
+
+1. ✅ **Current Price = LIVE** (fetched from exchange API, refreshes every 30s)
+2. ✅ **4 Dashboard Cards KEPT** (show stats for active symbols only)
+3. ✅ **Signals Page = Filtered** (only shows signals for active symbols)
+4. ✅ **Entries Page = Active Only** (default shows only active entries, filtered by active symbols)
+5. ✅ **Symbols Page = Master Control** (activating/deactivating symbols controls entire dashboard)
+
+---
+
+## 🎯 **SYSTEM FLOW:**
+```
+User adds BTC/USDT to Symbols Page (active=TRUE)
+    ↓
+System downloads 6 months historical data
+    ↓
+BTC/USDT appears in:
+    • Dashboard Table (with LIVE price)
+    • Dashboard Stat Cards (calculations include BTC)
+    • Signals Page (BTC signals)
+    • Entries Page (BTC active entries)
+    ↓
+User deactivates BTC/USDT
+    ↓
+BTC/USDT disappears from all pages
+
+✅ DELIVERABLES AT END OF PHASE 5.10:
+
+✅ Dashboard Table - 25 columns, LIVE prices, auto-refresh
+✅ 4 Dashboard Cards - Active Entries, Win Rate, Avg Profit, Signals (7d)
+✅ Editable Magic Lines - Click to edit inline
+✅ Auto S/R Calculation - Previous month high/low
+✅ Entry/Exit Tracking - Full history with exit reasons
+✅ Filtered Signals Page - Only active symbols
+✅ Filtered Entries Page - Only active entries from active symbols
+✅ Symbol Control - Master switch for dashboard visibility
+✅ Portfolio Management - Track holdings with LIVE P&L
+✅ DCA Calculator - Calculate averaging strategies
+✅ Auto Historical Download - 6 months data on symbol add

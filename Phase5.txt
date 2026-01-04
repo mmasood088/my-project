@@ -1,0 +1,235 @@
+PHASE 5 BREAKDOWN
+PHASE 5.1: Backend API Setup (FastAPI)
+Duration: 1-2 sessions
+Tasks:
+
+Create FastAPI application structure
+Set up CORS for React frontend
+Create database connection pool
+Basic health check endpoint
+
+Deliverable: Working API server on http://localhost:8000
+
+PHASE 5.2: Core API Endpoints
+Duration: 2-3 sessions
+Tasks:
+
+Signals API:
+
+GET /api/signals - List all signals with filters
+GET /api/signals/{id} - Get signal details
+Query params: symbol, timeframe, signal_type, date_range
+
+
+Entries API:
+
+GET /api/entries - List active entries
+GET /api/entries/{id} - Get entry details
+GET /api/entries/history - Historical entries
+
+
+Dashboard API:
+
+GET /api/dashboard/stats - Overall statistics
+GET /api/dashboard/performance - P&L summary
+
+
+
+Deliverable: Working REST API with data from database
+
+PHASE 5.3: Symbol Management API + Database ⭐
+Duration: 1 session
+Tasks:
+
+Create tracked_symbols table
+Migrate existing symbols to database
+API Endpoints:
+
+GET /api/symbols - List tracked symbols
+POST /api/symbols - Add new symbol
+PUT /api/symbols/{id} - Update symbol
+DELETE /api/symbols/{id} - Remove symbol
+POST /api/symbols/validate - Validate symbol on exchange
+
+
+Modify run_automation.py to read from database
+
+Deliverable: Dynamic symbol management via API
+
+PHASE 5.4: Frontend Setup (React + Vite)
+Duration: 1 session
+Tasks:
+
+Initialize React project with Vite
+Install dependencies (TailwindCSS, React Router, Axios)
+Set up project structure
+Configure API connection
+
+Deliverable: Basic React app running on http://localhost:5173
+
+PHASE 5.5: Dashboard View
+Duration: 2 sessions
+Tasks:
+
+Overview Cards:
+
+Total active entries
+Win rate %
+Total P&L
+Active signals count
+
+
+Recent Signals Table:
+
+Symbol, timeframe, signal type
+Score, entry price
+Time ago
+Click to view details
+
+
+Active Entries List:
+
+Symbol, entry price, current price
+Profit %, validation status
+Exit levels (EXIT-1, EXIT-2, EXIT-3)
+
+
+
+Deliverable: Working dashboard with live data
+
+PHASE 5.6: Signal List & Filtering
+Duration: 1-2 sessions
+Tasks:
+
+Signals Table:
+
+Sortable columns
+Filter by: symbol, timeframe, signal type
+Date range picker
+Pagination
+
+
+Signal Details Modal:
+
+Full signal breakdown
+Score components
+Indicator values
+Create entry button (manual)
+
+
+
+Deliverable: Comprehensive signal viewing
+
+PHASE 5.7: Entry Tracking View
+Duration: 2 sessions
+Tasks:
+
+Active Entries:
+
+Entry card with key metrics
+Progress bar (validation, profit zones)
+Exit level indicators
+Status badges
+
+
+Entry Details:
+
+Full timeline (entry → validation → exits)
+Price chart (optional)
+Profit/loss calculation
+Exit button (manual close)
+
+
+Historical Entries:
+
+Completed entries
+Performance metrics
+Filter by success/failure
+
+
+
+Deliverable: Complete entry tracking interface
+
+PHASE 5.8: Symbol Management UI ⭐
+Duration: 1 session
+Tasks:
+
+Symbol List Page:
+
+Table of tracked symbols
+Active/inactive toggle
+Edit/delete buttons
+
+
+Add Symbol Form:
+
+Exchange dropdown
+Symbol input with validation
+Timeframe checkboxes
+Real-time validation
+
+
+Edit Symbol Modal:
+
+Update timeframes
+Activate/deactivate
+
+
+
+Deliverable: User-friendly symbol management
+
+PHASE 5.9: Settings & Configuration
+Duration: 1 session
+Tasks:
+
+Signal Settings:
+
+Thresholds (A-BUY, BUY, EARLY-BUY)
+Validation percentages
+Exit zone settings
+
+
+System Settings:
+
+Automation status
+Last run time
+Error logs
+
+
+
+Deliverable: Configurable system settings
+
+PHASE 5.10: Polish & Responsive Design
+Duration: 1 session
+Tasks:
+
+Mobile responsive layout
+Loading states & error handling
+Toast notifications
+Dark mode (optional)
+Performance optimization
+
+Deliverable: Production-ready UI
+
+🎯 PHASE 5 TIMELINE SUMMARY
+Sub-PhaseDurationCumulative5.1 API Setup1-2 sessions1-25.2 Core APIs2-3 sessions3-55.3 Symbol Management ⭐1 session4-65.4 React Setup1 session5-75.5 Dashboard2 sessions7-95.6 Signals View1-2 sessions8-115.7 Entry Tracking2 sessions10-135.8 Symbol UI ⭐1 session11-145.9 Settings1 session12-155.10 Polish1 session13-16
+Total: 13-16 sessions (depends on complexity and pace)
+
+⭐ SYMBOL MANAGEMENT INTEGRATION
+Phase 5.3 (Backend): Database table + API
+Phase 5.8 (Frontend): User interface
+These two phases work together to implement your dynamic symbol management requirement!
+
+🔄 TRANSITION TO PHASE 6
+After Phase 5, you'll have:
+
+✅ Complete web dashboard
+✅ Dynamic symbol management
+✅ Entry tracking views
+✅ Signal browsing
+
+Phase 6 adds:
+
+Real-time updates (WebSocket)
+Live price streaming
+Entry status changes without refresh

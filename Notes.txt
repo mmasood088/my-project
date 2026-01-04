@@ -1,0 +1,33 @@
+1. Adjust the cron job to run whenever new symbol added 
+2. Download the data in background and store in a database at latest 6 month of data
+
+Below are my requirments that should be addressed
+1. Add a tab portfolio management. In this tab user can add remove coin/stock of their current trading, put thier buy price, total coin/stock quantity. Current price will get automatically from server. And it will calculate current profit and loss based on the buy price and current price.
+2. Add a tab for DCA, where user input the coin/stocks, buying price and current price, based on the data provided system will automatically calculate the DCA. if price is below the current price and stock/coin in loss this will calculate the DCA price
+In the Dashboard tab, There is a table like in our TradingView dashboard, where all user symbols present. In that table below are column list that will show: 
+Stock/Coin Name	Time Frame	Current Price 	S/R	ML	VWAP	VOL	RSI	RSI X	MAC	MAC  X	ADX	DI +/-	OBV	EMA	ST1	ST2	BB	SCR	E-Status	Entry	Exit Reason
+
+Below is explantion for every column: 
+Stock/Coin Name: Name of the stock/coin
+Time Frame: Time frame 15m, 1h, 4h, 1d
+Current Price: Current price of the stock/coin
+S/R: Support and Resistance level of the stock/coin
+ML: Magic line of the stock/coin
+VWAP: Volume weighted average price of the stock/coin
+VOL: Volume of the stock/coin
+RSI: Relative strength index of the stock/coin
+RSI X: RSI crossover
+MAC: Moving average convergence divergence of the stock/coin
+MAC X: MAC crossover
+ADX: Average directional index of the stock/coin
+DI +/-: Directional index plus or minus
+OBV: On balance volume of the stock/coin
+EMA: Exponential moving average of the stock/coin
+ST1: SuperTrend 1
+ST2: SuperTrend 2
+BB: Bollinger band of the stock/coin
+SCR: Score of the stock/coin
+E-Status: Entry status of the stock/coin
+Entry: Entry price of the stock/coin
+Exit Reason: Reason for exit of the stock/coin
+Plese note that all these above indicators we build in previous stage (backend section). Now we need to present in a table form in dashboard tab. Magic line price, user manually enter it. If user not enter it, then it will show blank. I will attach the Trading view dashboard snapshot for more clearity. 

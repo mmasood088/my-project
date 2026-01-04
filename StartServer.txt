@@ -1,0 +1,13 @@
+
+go to home/ts and simple run the below commands
+
+start-dashboard          # Start everything
+stop-dashboard           # Stop everything
+dashboard-status         # Check what's running
+dashboard-logs-api       # View FastAPI logs
+dashboard-logs-react     # View React logs
+
+
+Other options for bash 
+bash /home/ts/start-dashboard.sh
+bash /home/ts/stop-dashboard.sh
